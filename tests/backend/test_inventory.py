@@ -142,3 +142,13 @@ class TestInventoryEndpoints:
         # All items should be Power Supplies
         for item in data:
             assert item["category"].lower() == "power supplies"
+
+    def test_inventory_lead_time_days(self, client):
+        """Test that every inventory item has a lead_time_days in range."""
+        response = client.get("/api/inventory")
+        data = response.json()
+
+        for item in data:
+            assert "lead_time_days" in item
+            assert isinstance(item["lead_time_days"], int)
+            assert 5 <= item["lead_time_days"] <= 30
