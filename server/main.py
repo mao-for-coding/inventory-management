@@ -1,7 +1,8 @@
+from datetime import datetime, timedelta
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from typing import List, Optional
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from mock_data import inventory_items, orders, demand_forecasts, backlog_items, spending_summary, monthly_spending, category_spending, recent_transactions, purchase_orders
 
 app = FastAPI(title="Factory Inventory Management System")
@@ -38,11 +39,13 @@ def apply_filters(items: list, warehouse: Optional[str] = None, category: Option
     if warehouse and warehouse != 'all':
         filtered = [item for item in filtered if item.get('warehouse') == warehouse]
 
+    # `or ''` (not a .get default): restock orders store category/warehouse as
+    # an explicit None when items span multiple values, and None.lower() throws
     if category and category != 'all':
-        filtered = [item for item in filtered if item.get('category', '').lower() == category.lower()]
+        filtered = [item for item in filtered if (item.get('category') or '').lower() == category.lower()]
 
     if status and status != 'all':
-        filtered = [item for item in filtered if item.get('status', '').lower() == status.lower()]
+        filtered = [item for item in filtered if (item.get('status') or '').lower() == status.lower()]
 
     return filtered
 
@@ -67,6 +70,7 @@ class InventoryItem(BaseModel):
     unit_cost: float
     location: str
     last_updated: str
+    lead_time_days: Optional[int] = None
 
 class Order(BaseModel):
     id: str
@@ -120,6 +124,13 @@ class CreatePurchaseOrderRequest(BaseModel):
     expected_delivery_date: str
     notes: Optional[str] = None
 
+class CreateOrderItem(BaseModel):
+    sku: str
+    quantity: int = Field(gt=0)
+
+class CreateOrderRequest(BaseModel):
+    items: List[CreateOrderItem] = Field(min_length=1)
+
 # API endpoints
 @app.get("/")
 def root():
@@ -159,6 +170,55 @@ def get_order(order_id: str):
     order = next((order for order in orders if order["id"] == order_id), None)
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
+    return order
+
+@app.post("/api/orders", response_model=Order, status_code=201)
+def create_order(request: CreateOrderRequest):
+    """Create a restocking order. Prices come from inventory, not the client.
+
+    Appended to the in-memory orders list, so it resets on server restart.
+    """
+    order_items = []
+    lead_times = []
+    warehouses = set()
+    categories = set()
+    for req_item in request.items:
+        inv = next((i for i in inventory_items if i["sku"] == req_item.sku), None)
+        if not inv:
+            raise HTTPException(status_code=400, detail=f"Unknown SKU: {req_item.sku}")
+        order_items.append({
+            "sku": inv["sku"],
+            "name": inv["name"],
+            "quantity": req_item.quantity,
+            "unit_price": inv["unit_cost"]
+        })
+        lead_times.append(inv.get("lead_time_days") or 7)
+        warehouses.add(inv["warehouse"])
+        categories.add(inv["category"])
+
+    # max-based id stays correct across multiple POSTs (len-based would collide)
+    next_id = max(int(o["id"]) for o in orders) + 1
+    # datetime (not date.today()): date-only ISO strings are parsed as UTC
+    # midnight by JS Date, rendering a day early west of UTC; seed data uses
+    # datetime strings so new orders must match
+    now = datetime.now()
+    order = {
+        "id": str(next_id),
+        "order_number": f"ORD-{now.year}-{next_id:04d}",
+        "customer": "Internal Restock",
+        "items": order_items,
+        "status": "Submitted",
+        "order_date": now.isoformat(timespec="seconds"),
+        # order lead time = slowest item; drives the lead time shown in the UI
+        "expected_delivery": (now + timedelta(days=max(lead_times))).isoformat(timespec="seconds"),
+        "total_value": round(sum(i["quantity"] * i["unit_price"] for i in order_items), 2),
+        "actual_delivery": None,
+        # exact-match filters would misfile a mixed order under one warehouse,
+        # so only set these when all items agree
+        "warehouse": warehouses.pop() if len(warehouses) == 1 else None,
+        "category": categories.pop() if len(categories) == 1 else None
+    }
+    orders.append(order)
     return order
 
 @app.get("/api/demand", response_model=List[DemandForecast])

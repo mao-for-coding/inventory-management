@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Architecture — Factory Inventory Management System</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: #f8fafc;
+    color: #0f172a;
+    line-height: 1.55;
+  }
+  .wrap { max-width: 1040px; margin: 0 auto; padding: 48px 32px 80px; }
+
+  header { border-bottom: 1px solid #e2e8f0; padding-bottom: 24px; margin-bottom: 40px; }
+  header h1 { font-size: 28px; font-weight: 700; letter-spacing: -0.02em; }
+  header p { color: #64748b; margin-top: 6px; font-size: 15px; }
+  .badge {
+    display: inline-block; font-size: 12px; font-weight: 600; color: #475569;
+    background: #e2e8f0; border-radius: 4px; padding: 2px 8px; margin-right: 6px;
+  }
+
+  h2 { font-size: 19px; font-weight: 700; margin: 48px 0 16px; letter-spacing: -0.01em; }
+  h2:first-of-type { margin-top: 0; }
+  .sub { color: #64748b; font-size: 14px; margin: -10px 0 18px; }
+
+  /* Architecture diagram */
+  .diagram { display: flex; align-items: stretch; gap: 0; }
+  .tier {
+    flex: 1; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 10px;
+    padding: 20px; box-shadow: 0 1px 2px rgba(15,23,42,0.05);
+  }
+  .tier h3 { font-size: 15px; font-weight: 700; }
+  .tier .port { font-size: 12px; color: #64748b; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; margin-bottom: 12px; }
+  .tier ul { list-style: none; margin-top: 8px; }
+  .tier li {
+    font-size: 13px; color: #334155; background: #f1f5f9; border-radius: 6px;
+    padding: 6px 10px; margin-bottom: 6px;
+  }
+  .tier li span { color: #64748b; }
+  .arrow {
+    display: flex; flex-direction: column; justify-content: center; align-items: center;
+    padding: 0 14px; min-width: 120px;
+  }
+  .arrow .label { font-size: 11.5px; color: #64748b; text-align: center; margin: 4px 0; white-space: nowrap; }
+  .arrow .line { color: #94a3b8; font-size: 18px; letter-spacing: -1px; }
+
+  .tier.frontend { border-top: 3px solid #3b82f6; }
+  .tier.backend  { border-top: 3px solid #10b981; }
+  .tier.data     { border-top: 3px solid #f59e0b; }
+
+  /* Tech stack cards */
+  .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+  .card {
+    background: #ffffff; border: 1px solid #e2e8f0; border-radius: 10px; padding: 18px 20px;
+    box-shadow: 0 1px 2px rgba(15,23,42,0.05);
+  }
+  .card h3 { font-size: 14px; font-weight: 700; margin-bottom: 10px; color: #0f172a; }
+  .card table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .card td { padding: 4px 0; color: #334155; vertical-align: top; }
+  .card td:last-child { text-align: right; color: #64748b; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
+
+  /* Data flow */
+  .flow { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+  .step {
+    background: #ffffff; border: 1px solid #e2e8f0; border-radius: 8px;
+    padding: 10px 14px; font-size: 13px; box-shadow: 0 1px 2px rgba(15,23,42,0.05);
+  }
+  .step b { display: block; font-size: 13px; }
+  .step span { color: #64748b; font-size: 12px; }
+  .flow .sep { color: #94a3b8; font-size: 15px; }
+
+  /* Endpoint table */
+  table.endpoints { width: 100%; border-collapse: collapse; background: #fff; border: 1px solid #e2e8f0; border-radius: 10px; overflow: hidden; font-size: 13.5px; }
+  table.endpoints th {
+    text-align: left; background: #f1f5f9; color: #475569; font-size: 12px;
+    text-transform: uppercase; letter-spacing: 0.04em; padding: 10px 14px; border-bottom: 1px solid #e2e8f0;
+  }
+  table.endpoints td { padding: 9px 14px; border-bottom: 1px solid #f1f5f9; vertical-align: top; }
+  table.endpoints tr:last-child td { border-bottom: none; }
+  code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12.5px;
+    background: #f1f5f9; border-radius: 4px; padding: 1px 6px; color: #0f172a;
+  }
+  .method { font-weight: 700; font-size: 11.5px; color: #10b981; font-family: ui-monospace, Menlo, monospace; }
+
+  .note {
+    background: #fffbeb; border: 1px solid #fde68a; border-radius: 10px;
+    padding: 14px 18px; font-size: 13.5px; color: #78350f; margin-top: 18px;
+  }
+  .note b { display: block; margin-bottom: 4px; }
+
+  footer { margin-top: 56px; color: #94a3b8; font-size: 12.5px; border-top: 1px solid #e2e8f0; padding-top: 16px; }
+
+  @media (max-width: 800px) {
+    .diagram { flex-direction: column; }
+    .arrow { transform: rotate(90deg); min-width: auto; padding: 10px 0; }
+    .grid { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <h1>Factory Inventory Management System</h1>
+    <p>Architecture overview — a full-stack demo with a Vue 3 SPA, a FastAPI backend, and in-memory mock data (no database).</p>
+    <p style="margin-top:10px">
+      <span class="badge">Vue 3</span><span class="badge">Vite</span><span class="badge">FastAPI</span><span class="badge">Pydantic v2</span><span class="badge">uv</span><span class="badge">In-memory data</span>
+    </p>
+  </header>
+
+  <h2>System Architecture</h2>
+  <p class="sub">Three tiers: a browser SPA, a REST API, and JSON files loaded into memory at startup.</p>
+  <div class="diagram">
+    <div class="tier frontend">
+      <h3>Frontend — Vue 3 SPA</h3>
+      <div class="port">Vite dev server · localhost:3000</div>
+      <ul>
+        <li>6 routed views <span>(Dashboard, Inventory, Orders, Demand, Spending, Reports)</span></li>
+        <li>9 components <span>(FilterBar, 6 detail modals, profile, i18n switcher)</span></li>
+        <li>3 composables <span>(useFilters, useAuth, useI18n — shared module-level refs)</span></li>
+        <li>api.js <span>— single Axios client, all HTTP calls centralized</span></li>
+        <li>Custom SVG charts <span>— no chart library</span></li>
+        <li>Locales <span>— English / Japanese</span></li>
+      </ul>
+    </div>
+    <div class="arrow">
+      <div class="label">HTTP / JSON</div>
+      <div class="line">──────▶</div>
+      <div class="label">Axios · query-param filters</div>
+      <div class="label">CORS: allow all (dev)</div>
+    </div>
+    <div class="tier backend">
+      <h3>Backend — FastAPI</h3>
+      <div class="port">Uvicorn · localhost:8001</div>
+      <ul>
+        <li>main.py <span>— 14 GET endpoints, routes + filtering + aggregation</span></li>
+        <li>Pydantic models <span>— typed response validation (response_model)</span></li>
+        <li>In-memory filtering <span>— list comprehensions over loaded data</span></li>
+        <li>Swagger docs <span>— auto-generated at /docs</span></li>
+      </ul>
+    </div>
+    <div class="arrow">
+      <div class="label">Loaded once</div>
+      <div class="line">──────▶</div>
+      <div class="label">at startup by mock_data.py</div>
+    </div>
+    <div class="tier data">
+      <h3>Data — JSON files</h3>
+      <div class="port">server/data/ · Sept 2025 sample data</div>
+      <ul>
+        <li>inventory.json</li>
+        <li>orders.json</li>
+        <li>demand_forecasts.json</li>
+        <li>backlog_items.json</li>
+        <li>spending.json <span>+ transactions.json</span></li>
+        <li>purchase_orders.json</li>
+      </ul>
+    </div>
+  </div>
+
+  <h2>Tech Stack</h2>
+  <div class="grid">
+    <div class="card">
+      <h3>Frontend</h3>
+      <table>
+        <tr><td>Vue (Composition API)</td><td>^3.4</td></tr>
+        <tr><td>Vue Router</td><td>^4.3</td></tr>
+        <tr><td>Axios</td><td>^1.6</td></tr>
+        <tr><td>Vite + plugin-vue</td><td>^5.x</td></tr>
+      </table>
+    </div>
+    <div class="card">
+      <h3>Backend</h3>
+      <table>
+        <tr><td>Python</td><td>&ge;3.11</td></tr>
+        <tr><td>FastAPI</td><td>&ge;0.110</td></tr>
+        <tr><td>Uvicorn</td><td>&ge;0.24</td></tr>
+        <tr><td>Pydantic</td><td>&ge;2.5</td></tr>
+      </table>
+    </div>
+    <div class="card">
+      <h3>Tooling &amp; Tests</h3>
+      <table>
+        <tr><td>uv</td><td>Python env/deps</td></tr>
+        <tr><td>npm</td><td>JS deps</td></tr>
+        <tr><td>pytest + httpx</td><td>API tests</td></tr>
+        <tr><td>pytest-cov</td><td>coverage</td></tr>
+      </table>
+    </div>
+  </div>
+
+  <h2>Data Flow</h2>
+  <p class="sub">A filter change on any view flows through the same request/render cycle. Four global filters (Time Period, Warehouse, Category, Order Status) live in a shared composable.</p>
+  <div class="flow">
+    <div class="step"><b>User changes filter</b><span>FilterBar.vue</span></div>
+    <div class="sep">▶</div>
+    <div class="step"><b>useFilters composable</b><span>shared reactive refs</span></div>
+    <div class="sep">▶</div>
+    <div class="step"><b>api.js</b><span>builds query params, skips "all"</span></div>
+    <div class="sep">▶</div>
+    <div class="step"><b>FastAPI endpoint</b><span>GET /api/… ?warehouse=&amp;category=…</span></div>
+    <div class="sep">▶</div>
+    <div class="step"><b>In-memory filter</b><span>list comprehensions on copies</span></div>
+    <div class="sep">▶</div>
+    <div class="step"><b>Pydantic validation</b><span>response_model</span></div>
+    <div class="sep">▶</div>
+    <div class="step"><b>Raw data → refs</b><span>allOrders, inventoryItems</span></div>
+    <div class="sep">▶</div>
+    <div class="step"><b>Computed properties</b><span>derived totals, chart series</span></div>
+    <div class="sep">▶</div>
+    <div class="step"><b>Render</b><span>tables + custom SVG charts</span></div>
+  </div>
+
+  <h2>API Endpoints</h2>
+  <table class="endpoints">
+    <tr><th style="width:70px">Method</th><th style="width:320px">Path</th><th>Purpose / Filters</th></tr>
+    <tr><td class="method">GET</td><td><code>/api/inventory</code> · <code>/api/inventory/{id}</code></td><td>Inventory list &amp; detail — filters: warehouse, category (no time dimension)</td></tr>
+    <tr><td class="method">GET</td><td><code>/api/orders</code> · <code>/api/orders/{id}</code></td><td>Orders list &amp; detail — filters: warehouse, category, status, month</td></tr>
+    <tr><td class="method">GET</td><td><code>/api/dashboard/summary</code></td><td>KPI aggregates — all four filters</td></tr>
+    <tr><td class="method">GET</td><td><code>/api/demand</code> · <code>/api/backlog</code></td><td>Demand forecasts and backlog items — no filters</td></tr>
+    <tr><td class="method">GET</td><td><code>/api/spending/summary</code> · <code>/monthly</code> · <code>/categories</code> · <code>/transactions</code></td><td>Spending analytics — no filters</td></tr>
+    <tr><td class="method">GET</td><td><code>/api/reports/quarterly</code> · <code>/api/reports/monthly-trends</code></td><td>Report aggregations (revenue goals: $800K/month, $9.6M YTD)</td></tr>
+  </table>
+
+  <div class="note">
+    <b>Known gap: orphaned client API methods</b>
+    <code>client/src/api.js</code> defines calls to <code>/api/tasks</code> (GET/POST/PATCH/DELETE) and <code>/api/purchase-orders</code> (GET/POST), and the UI includes <code>TasksModal.vue</code>, but <code>server/main.py</code> implements no such routes — those calls will 404. <code>purchase_orders.json</code> is loaded by <code>mock_data.py</code> but never served. Likewise, <code>Backlog.vue</code> exists as a view but has no route in the router.
+  </div>
+
+  <h2>Key Design Decisions</h2>
+  <div class="grid">
+    <div class="card">
+      <h3>No database</h3>
+      <p style="font-size:13px;color:#334155">All data loads from JSON at startup and lives in process memory. Fast, zero setup, resets on restart — appropriate for a demo of &lt;10K records.</p>
+    </div>
+    <div class="card">
+      <h3>Centralized filtering</h3>
+      <p style="font-size:13px;color:#334155">Filters are optional query params; the value <code>"all"</code> means "skip this filter" on both client and server, keeping the two sides symmetric.</p>
+    </div>
+    <div class="card">
+      <h3>No UI framework</h3>
+      <p style="font-size:13px;color:#334155">Charts are hand-rolled SVG; layout is CSS Grid; styling is a slate/gray design system defined in <code>App.vue</code>. No component or chart libraries.</p>
+    </div>
+  </div>
+
+  <footer>
+    Generated from source on 2026-07-06 · repo: inventory-management · entry points: <code>server/main.py</code>, <code>client/src/main.js</code>
+  </footer>
+
+</div>
+</body>
+</html>
